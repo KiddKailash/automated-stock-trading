@@ -58,7 +58,7 @@ Trading in financial markets involves risk, and **you** are solely responsible f
 
 1. **Clone the repository**  
    ```bash
-   git clone https://github.com/<YourUsername>/MagicFormulaTrader.git
+   git clone https://github.com/KiddKailash/automated-stock-trading
    cd MagicFormulaTrader
    ```
 
