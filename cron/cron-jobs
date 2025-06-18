@@ -1,5 +1,8 @@
 # Magic Formula Buy Script: 1st day of Jan, Apr, Jul, Oct at 09:00 AM
-0 9 1 1,4,7,10 * /usr/bin/node /path/to/magic-formula-trader.js >> /path/to/logs/magic-formula-trader.log 2>&1
+0 9 1 1,4,7,10 * cd /app && /usr/local/bin/node scripts/buyPositions.js >> logs/buyOrders.log 2>&1
 
-# Portfolio Management Script: Daily at 10:00 AM
-0 10 * * * /usr/bin/node /path/to/manage-portfolio.js >> /path/to/logs/manage-portfolio.log 2>&1
+# Portfolio Management Script: Daily at 10:00 AM (Monday-Friday)
+0 10 * * 1-5 * cd /app && /usr/local/bin/node scripts/sellPositions.js >> logs/sellPositions.log 2>&1
+
+# System health check: Every hour
+0 * * * * curl -f http://localhost:3000/health >> logs/health-check.log 2>&1
