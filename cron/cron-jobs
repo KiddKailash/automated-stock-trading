@@ -1,0 +1,5 @@
+# Magic Formula Buy Script: 1st day of Jan, Apr, Jul, Oct at 09:00 AM
+0 9 1 1,4,7,10 * /usr/bin/node /path/to/magic-formula-trader.js >> /path/to/logs/magic-formula-trader.log 2>&1
+
+# Portfolio Management Script: Daily at 10:00 AM
+0 10 * * * /usr/bin/node /path/to/manage-portfolio.js >> /path/to/logs/manage-portfolio.log 2>&1
