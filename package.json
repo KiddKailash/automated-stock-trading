@@ -4,7 +4,14 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "NODE_ENV=production node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "build": "echo \"Build process - preparing for deployment\"",
+    "logs": "tail -f logs/server.log",
+    "buy": "node src/scripts/buyPositions.js",
+    "sell": "node src/scripts/sellPositions.js",
+    "docker:build": "docker build -t magic-formula-trader .",
+    "docker:run": "docker run -p 3000:3000 magic-formula-trader"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +22,7 @@
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.10.0",
     "sqlite3": "^5.1.7"
   }
