@@ -1,0 +1,68 @@
+# Magic Formula Trader Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# ===== SERVER CONFIGURATION =====
+NODE_ENV=development
+PORT=3000
+
+# ===== DIRECTORIES =====
+LOG_DIR=./logs
+DATABASE_DIR=./database
+
+# ===== ALPACA TRADING API =====
+# Get these from your Alpaca account: https://alpaca.markets/
+ALPACA_API_KEY=your_alpaca_api_key_here
+ALPACA_API_SECRET=your_alpaca_secret_key_here
+# Use paper trading URL for testing: https://paper-api.alpaca.markets
+# Use live trading URL for production: https://api.alpaca.markets
+ALPACA_BASE_URL=https://paper-api.alpaca.markets
+
+# ===== FINANCIAL MODELING PREP API =====
+# Get your API key from: https://financialmodelingprep.com/
+FMP_API_KEY=your_fmp_api_key_here
+
+# ===== TRADING STRATEGY PARAMETERS =====
+# Number of stocks to buy in each batch (quarterly)
+NUMBER_OF_STOCKS_PER_BATCH=20
+
+# Maximum percentage of portfolio to invest in new positions
+MAX_TOTAL_INVESTMENT_PERCENT=0.1
+
+# Minimum market cap for stock screening (in dollars)
+# Example: 1000000000 = $1 billion market cap minimum
+STOCK_SCREENER_MARKET_CAP=1000000000
+
+# ===== POSITION MANAGEMENT =====
+# Number of days to hold unprofitable positions before selling (tax loss harvesting)
+SELL_UNPROFITABLE_AFTER_DAYS=365
+
+# Number of days to hold profitable positions before selling (long-term capital gains)
+SELL_PROFITABLE_AFTER_DAYS=365
+
+# ===== EMAIL NOTIFICATIONS =====
+# Gmail configuration for sending trade notifications
+EMAIL_FROM=your_email@gmail.com
+# Use App Password for Gmail: https://support.google.com/accounts/answer/185833
+EMAIL_PASS=your_gmail_app_password
+EMAIL_TO=recipient@example.com
+
+# ===== OPTIONAL ADVANCED SETTINGS =====
+# Database connection settings (if using external database)
+# DATABASE_URL=sqlite:./database/portfolio.db
+
+# Logging level (error, warn, info, debug)
+LOG_LEVEL=info
+
+# Timezone for cron jobs
+TIMEZONE=America/New_York
+
+# ===== DEVELOPMENT SETTINGS =====
+# Set to true to enable detailed logging in development
+DEBUG=false
+
+# ===== SECURITY SETTINGS =====
+# API rate limiting (requests per minute)
+RATE_LIMIT=100
+
+# Session secret for web dashboard (generate a random string)
+SESSION_SECRET=your_random_session_secret_here 
