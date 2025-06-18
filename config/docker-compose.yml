@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  magic-formula-trader:
+    build: .
+    container_name: magic-formula-trader
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./database:/app/database
+      - ./config:/app/config
+    restart: unless-stopped
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: Add a database service if you want to use external DB
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: trading-db
+  #   environment:
+  #     POSTGRES_DB: trading
+  #     POSTGRES_USER: trading_user
+  #     POSTGRES_PASSWORD: secure_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - trading-network
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local 
