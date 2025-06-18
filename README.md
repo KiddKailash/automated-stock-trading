@@ -1,19 +1,19 @@
-# 🎯 Magic Formula Trader
+# Magic Formula Trader
 
-A complete Node.js application that implements Joel Greenblatt's Magic Formula investing strategy with automated trading, web dashboard, and Docker deployment support.
+An application that implements and automatically executed Joel Greenblatt's Magic Formula stock investing strategy. This system operates entirely via scheduled automation with a monitoring dashboard for oversight.
 
-## 🚀 Features
+## Features
 
-- **Automated Trading**: Quarterly buying and daily selling based on Magic Formula strategy
-- **Web Dashboard**: Real-time monitoring and manual controls
-- **RESTful API**: Complete API for portfolio management
+- **Fully Automated Trading**: Quarterly buying and daily selling based on Magic Formula strategy
+- **Monitoring Dashboard**: Real-time portfolio monitoring and system health
+- **RESTful API**: Complete API for portfolio data and system monitoring
 - **Docker Support**: Easy deployment with Docker and Docker Compose
 - **Email Notifications**: Automated trade notifications via Gmail
 - **Cron Job Scheduling**: Built-in scheduling for automated operations
 - **SQLite Database**: Local data storage for holdings and transactions
-- **Health Monitoring**: System health checks and logging
+- **Security-First**: No manual trading capabilities for maximum consistency and security
 
-## 🏗️ Architecture
+## Architecture
 
 **Magic Formula Trader** uses:
 - [Express.js](https://expressjs.com/) for the web server and API
@@ -28,9 +28,9 @@ The strategy selects stocks ranked by:
 - **High earnings yield** (EBIT/Enterprise Value)
 - **High return on invested capital (ROIC)** (EBIT/(Net Working Capital + Net Fixed Assets))
 
-## 📊 Trading Strategy Flow
+## Trading Strategy Flow
 
-1. **buyPositions.js** (Quarterly - 1st day of Jan, Apr, Jul, Oct)
+1. **src/scripts/buyPositions.js** (Quarterly - 1st day of Jan, Apr, Jul, Oct)
    - Fetches NYSE stocks above specified market cap threshold
    - Retrieves financial metrics (`earningsYield`, `roic`) from FMP API
    - Ranks stocks using Magic Formula methodology
@@ -38,15 +38,15 @@ The strategy selects stocks ranked by:
    - Records transactions in SQLite database
    - Sends email notifications
 
-2. **sellPositions.js** (Daily - Weekdays at 10 AM)
+2. **src/scripts/sellPositions.js** (Daily - Weekdays at 10 AM)
    - Checks open positions from Alpaca
    - Sells positions meeting criteria:
-     - **Unprofitable** positions after X days (tax-loss harvesting)
-     - **Profitable** positions after Y days (long-term capital gains)
+     - **Unprofitable** positions after 364 days (tax-loss harvesting)
+     - **Profitable** positions after 366 days (long-term capital gains)
    - Updates database records
    - Sends email notifications
 
-3. **server.js** (Always Running)
+3. **src/server.js** (Always Running)
    - Provides web dashboard and API endpoints
    - Manages cron job scheduling
    - Handles manual trading triggers
@@ -64,14 +64,14 @@ The strategy selects stocks ranked by:
 
 1. **Clone and Setup**
    ```bash
-   git clone <repository-url>
-   cd Automated-Trading
-   chmod +x scripts/*.sh
+   git clone https://github.com/KiddKailash/automated-stock-trading
+   cd automated-stock-trading
+   chmod +x config/*.sh
    ```
 
 2. **Build and Configure**
    ```bash
-   ./scripts/build.sh
+   ./config/build.sh
    ```
    This will:
    - Install dependencies
@@ -88,10 +88,10 @@ The strategy selects stocks ranked by:
 4. **Start the Application**
    ```bash
    # Development mode
-   ./scripts/start.sh development
+   npm run dev
    
    # Production mode  
-   ./scripts/start.sh production
+   npm start
    ```
 
 5. **Access Dashboard**
@@ -101,7 +101,7 @@ The strategy selects stocks ranked by:
 
 1. **Build Docker Image**
    ```bash
-   ./scripts/docker-build.sh
+   ./config/docker-build.sh
    ```
 
 2. **Run with Docker Compose**
@@ -114,86 +114,22 @@ The strategy selects stocks ranked by:
    docker run -p 3000:3000 --env-file .env magic-formula-trader
    ```
 
-## 🔧 Configuration
-
-Key environment variables in `.env`:
-
-```bash
-NODE_ENV=development
-PORT=3000
-
-LOG_DIR=./logs
-DATABASE_DIR=./database
-
-# ===== ALPACA TRADING API =====
-# Get these from your Alpaca account: https://alpaca.markets/
-ALPACA_API_KEY=your_alpaca_api_key_here
-ALPACA_API_SECRET=your_alpaca_secret_key_here
-# Use paper trading URL for testing: https://paper-api.alpaca.markets
-# Use live trading URL for production: https://api.alpaca.markets
-ALPACA_BASE_URL=https://paper-api.alpaca.markets
-
-# ===== FINANCIAL MODELING PREP API =====
-# Get your API key from: https://financialmodelingprep.com/
-FMP_API_KEY=your_fmp_api_key_here
-
-# ===== TRADING STRATEGY PARAMETERS =====
-# Number of stocks to buy in each batch (quarterly)
-NUMBER_OF_STOCKS_PER_BATCH=20
-
-# Maximum percentage of portfolio to invest in new positions
-MAX_TOTAL_INVESTMENT_PERCENT=0.1
-
-# Minimum market cap for stock screening (in dollars)
-# Example: 1000000000 = $1 billion market cap minimum
-STOCK_SCREENER_MARKET_CAP=1000000000
-
-# ===== POSITION MANAGEMENT =====
-# Number of days to hold unprofitable positions before selling (tax loss harvesting)
-SELL_UNPROFITABLE_AFTER_DAYS=364
-
-# Number of days to hold profitable positions before selling (long-term capital gains)
-SELL_PROFITABLE_AFTER_DAYS=366
-
-# ===== EMAIL NOTIFICATIONS =====
-EMAIL_FROM=your_email@gmail.com
-EMAIL_PASS=your_gmail_app_password
-EMAIL_TO=recipient@example.com
-
-# ===== OPTIONAL ADVANCED SETTINGS =====
-LOG_LEVEL=info
-TIMEZONE=America/New_York
-
-# ===== DEVELOPMENT SETTINGS =====
-# Set to true to enable detailed logging in development
-DEBUG=false
-
-# ===== SECURITY SETTINGS =====
-# API rate limiting (requests per minute)
-RATE_LIMIT=100
-
-# Session secret for web dashboard (generate a random string)
-SESSION_SECRET=your_random_session_secret_here 
-```
-
 ## 📡 API Endpoints
 
 ### Dashboard & Health
-- `GET /` - Web dashboard
+- `GET /` - Monitoring dashboard
 - `GET /health` - System health check
 
-### Portfolio Management
+### Portfolio Data
 - `GET /api/holdings` - Get all portfolio holdings
 - `GET /api/transactions` - Get transaction history
 - `GET /api/stats` - Portfolio statistics
 
-### Manual Controls
-- `POST /api/manual/buy` - Trigger manual buy process
-- `POST /api/manual/sell` - Trigger manual sell process
-
-### System Management
-- `GET /api/cron/status` - Cron job status
+### System Monitoring
+- `GET /api/cron/status` - Automated job status
 - `GET /api/logs/:logFile` - View system logs
+
+**⚠️ Note:** This system operates fully automatically via scheduled cron jobs. All trades are executed automatically.
 
 ## 📅 Scheduled Operations
 
@@ -203,27 +139,35 @@ The system runs automated operations using cron jobs:
 - **Selling**: Daily at 10:00 AM EST (weekdays only)  
 - **Health Check**: Every hour
 
-Schedules can be customized in `server.js` or disabled by setting `NODE_ENV=development`.
+Schedules can be customized in `src/server.js` or disabled by setting `NODE_ENV=development`.
 
-## 📝 NPM Scripts
+## 📝 Available Commands
 
-- `npm start` - Start in production mode
-- `npm run dev` - Start in development mode  
+### NPM Scripts
+- `npm start` - Start in production mode (enables automated trading)
+- `npm run dev` - Start in development mode (monitoring only)
 - `npm run build` - Prepare for deployment
-- `npm run buy` - Manual buy positions
-- `npm run sell` - Manual sell positions
 - `npm run logs` - Tail server logs
 - `npm run docker:build` - Build Docker image
 - `npm run docker:run` - Run Docker container
+
+### Build Scripts
+- `./config/build.sh` - Setup and build project
+- `./config/start.sh` - Start with environment selection
+- `./config/docker-build.sh` - Build Docker image with custom options
+
+**Note:** Manual trading scripts have been removed. All trading operations are handled automatically by the system's cron jobs when running in production mode.
 
 ## 📂 Project Structure
 
 ```
 Automated-Trading/
-├── server.js              # Main Express server
-├── scripts/
-│   ├── buyPositions.js     # Quarterly buying logic
-│   ├── sellPositions.js    # Daily selling logic
+├── src/                   # Source code directory
+│   ├── server.js          # Main Express server
+│   └── scripts/           # Trading scripts
+│       ├── buyPositions.js    # Quarterly buying logic
+│       └── sellPositions.js   # Daily selling logic
+├── config/                # Build and deployment scripts
 │   ├── build.sh           # Build script
 │   ├── start.sh           # Start script
 │   └── docker-build.sh    # Docker build script
@@ -231,10 +175,11 @@ Automated-Trading/
 ├── logs/                  # Application logs
 ├── cron/
 │   └── cron-jobs          # Cron job definitions
-├── config/                # Configuration files
 ├── Dockerfile             # Docker configuration
 ├── docker-compose.yml     # Docker Compose setup
+├── .dockerignore          # Docker ignore file
 ├── env-template.txt       # Environment template
+├── package.json           # NPM dependencies and scripts
 └── README.md             # This file
 ```
 
@@ -247,41 +192,6 @@ Automated-Trading/
 - Regular backup of SQLite database recommended
 
 ## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Application won't start**
-   - Check `.env` file exists and has valid values
-   - Ensure all dependencies installed: `npm install`
-   - Check logs: `npm run logs`
-
-2. **Trading operations fail**
-   - Verify Alpaca API keys are correct
-   - Check account has sufficient buying power
-   - Ensure market is open for trading
-
-3. **Email notifications not working**
-   - Use Gmail App Password (not regular password)
-   - Enable 2-factor authentication on Gmail
-   - Check EMAIL_FROM and EMAIL_TO addresses
-
-4. **Docker issues**
-   - Ensure Docker is running
-   - Check port 3000 is available
-   - Verify `.env` file exists for docker-compose
-
-### Logs
-- Server logs: `logs/server.log`
-- Buy operations: `logs/buyOrders.log`
-- Sell operations: `logs/sellPositions.log`
-- Cron errors: `logs/cron-errors.log`
-
-## 📈 Monitoring & Maintenance
-
-- Monitor system health via `/health` endpoint
-- Review logs regularly for errors
-- Backup SQLite database periodically
-- Monitor trading performance via dashboard
 
 ## ⚠️ Disclaimer
 
