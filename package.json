@@ -8,8 +8,6 @@
     "dev": "NODE_ENV=development node src/server.js",
     "build": "echo \"Build process - preparing for deployment\"",
     "logs": "tail -f logs/server.log",
-    "buy": "node src/scripts/buyPositions.js",
-    "sell": "node src/scripts/sellPositions.js",
     "docker:build": "docker build -t magic-formula-trader .",
     "docker:run": "docker run -p 3000:3000 magic-formula-trader"
   },

@@ -249,47 +249,7 @@ app.get('/api/transactions', (req, res) => {
     });
 });
 
-// Manual buy trigger
-app.post('/api/manual/buy', async (req, res) => {
-    logMessage('Manual buy positions triggered via API');
-    
-    try {
-        const result = await executeScript('./src/scripts/buyPositions.js');
-        res.json({
-            success: true,
-            message: 'Buy positions script executed successfully',
-            output: result.stdout
-        });
-    } catch (error) {
-        logMessage(`Manual buy failed: ${error.message}`, 'api-errors.log');
-        res.status(500).json({
-            success: false,
-            error: 'Script execution failed',
-            message: error.message
-        });
-    }
-});
-
-// Manual sell trigger
-app.post('/api/manual/sell', async (req, res) => {
-    logMessage('Manual sell positions triggered via API');
-    
-    try {
-        const result = await executeScript('./src/scripts/sellPositions.js');
-        res.json({
-            success: true,
-            message: 'Sell positions script executed successfully',
-            output: result.stdout
-        });
-    } catch (error) {
-        logMessage(`Manual sell failed: ${error.message}`, 'api-errors.log');
-        res.status(500).json({
-            success: false,
-            error: 'Script execution failed',
-            message: error.message
-        });
-    }
-});
+// Manual trading endpoints removed - trades execute automatically via cron jobs only
 
 // Get system logs
 app.get('/api/logs/:logFile?', (req, res) => {
@@ -426,15 +386,15 @@ app.get('/', (req, res) => {
                 </div>
                 
                 <div class="api-section">
-                    <h2>Manual Controls</h2>
-                    <button onclick="triggerBuy()">🛒 Manual Buy</button>
-                    <button onclick="triggerSell()">💰 Manual Sell</button>
+                    <h2>System Monitoring</h2>
                     <button onclick="checkHealth()">❤️ Health Check</button>
                     <button onclick="viewLogs()">📋 View Logs</button>
+                    <button onclick="viewPortfolio()">📊 Portfolio Overview</button>
+                    <button onclick="viewCronStatus()">⏰ Cron Jobs Status</button>
                 </div>
                 
                 <div class="api-section">
-                    <h2>API Endpoints</h2>
+                    <h2>Available API Endpoints</h2>
                     <div class="api-endpoint">
                         <strong>GET /health</strong> - System health check
                     </div>
@@ -448,10 +408,13 @@ app.get('/', (req, res) => {
                         <strong>GET /api/stats</strong> - Portfolio statistics
                     </div>
                     <div class="api-endpoint">
-                        <strong>POST /api/manual/buy</strong> - Manual buy trigger
+                        <strong>GET /api/cron/status</strong> - Automated job status
                     </div>
                     <div class="api-endpoint">
-                        <strong>POST /api/manual/sell</strong> - Manual sell trigger
+                        <strong>GET /api/logs/:logFile</strong> - System logs
+                    </div>
+                    <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 4px solid #ffc107;">
+                        <strong>⚠️ Note:</strong> This system operates fully automatically via scheduled cron jobs. Manual trading is not available for security and consistency.
                     </div>
                 </div>
                 
@@ -469,18 +432,28 @@ app.get('/', (req, res) => {
                         .catch(e => document.getElementById('status').textContent = 'Error');
                 }
                 
-                function triggerBuy() {
-                    fetch('/api/manual/buy', { method: 'POST' })
-                        .then(r => r.json())
-                        .then(data => displayOutput('Buy Result', data))
-                        .catch(e => displayOutput('Buy Error', e));
+                function viewPortfolio() {
+                    Promise.all([
+                        fetch('/api/holdings').then(r => r.json()),
+                        fetch('/api/transactions?limit=10').then(r => r.json()),
+                        fetch('/api/stats').then(r => r.json())
+                    ])
+                    .then(([holdings, transactions, stats]) => {
+                        const portfolioData = {
+                            holdings: holdings.data || [],
+                            recentTransactions: transactions.data || [],
+                            statistics: stats.stats || {}
+                        };
+                        displayOutput('Portfolio Overview', portfolioData);
+                    })
+                    .catch(e => displayOutput('Portfolio Error', e));
                 }
                 
-                function triggerSell() {
-                    fetch('/api/manual/sell', { method: 'POST' })
+                function viewCronStatus() {
+                    fetch('/api/cron/status')
                         .then(r => r.json())
-                        .then(data => displayOutput('Sell Result', data))
-                        .catch(e => displayOutput('Sell Error', e));
+                        .then(data => displayOutput('Automated Jobs Status', data))
+                        .catch(e => displayOutput('Cron Status Error', e));
                 }
                 
                 function checkHealth() {
@@ -533,8 +506,7 @@ app.use((req, res) => {
             'GET /api/transactions',
             'GET /api/stats',
             'GET /api/cron/status',
-            'POST /api/manual/buy',
-            'POST /api/manual/sell'
+            'GET /api/logs/:logFile'
         ]
     });
 });
