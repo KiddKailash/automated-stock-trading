@@ -388,11 +388,15 @@ app.get("/", (req, res) => {
                 }
                 .header {
                     background: #ffffff;
+                    min-width: 100vw;
                     padding: 1.5rem 2rem;
                     border-bottom: 1px solid #f0f0f0;
                     position: sticky;
                     top: 0;
                     z-index: 100;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
                 }
                 .header h1 {
                     color: #2a2a2a;
@@ -411,7 +415,7 @@ app.get("/", (req, res) => {
                     opacity: 0.7;
                 }
                 .container {
-                    max-width: 1400px;
+                    max-width: 80%;
                     margin: 0 auto;
                     padding: 2rem;
                     display: grid;
@@ -580,9 +584,11 @@ app.get("/", (req, res) => {
             <div class="header">
                 <h1>
                     Magic Formula Trader
-                    <div class="status-indicator" id="statusIndicator"></div>
-                    <span id="headerStatus">Loading...</span>
                 </h1>
+                <div style="display: flex; flex-direction: row; gap: 0.5rem; align-items: center; justify-content: center;">
+                    <div class="status-indicator" id="statusIndicator" style="margin: auto;"></div>
+                    <span id="headerStatus"">Loading...</span>
+                </div>
             </div>
             
             <div class="container">
