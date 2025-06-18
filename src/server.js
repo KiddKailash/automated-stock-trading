@@ -190,7 +190,7 @@ const healthCheckCron = cron.schedule(
 );
 
 // Start cron jobs
-if (NODE_ENV === "production") {
+if (NODE_ENV === "prod") {
   buyPositionsCron.start();
   sellPositionsCron.start();
   healthCheckCron.start();
@@ -605,11 +605,11 @@ app.get("/", (req, res) => {
                         <h3>System Status</h3> 
                         <div class="metric-grid">
                             <div class="metric">
-                                <div class="metric-value" id="systemStatus">Loading...</div>
+                                <div class="metric-value" id="systemStatus" style="text-transform: capitalize;">Loading...</div>
                                 <div class="metric-label">Status</div>
                             </div>
                             <div class="metric">
-                                <div class="metric-value" id="environment">${NODE_ENV}</div>
+                                <div class="metric-value" id="environment" style="text-transform: capitalize;">${NODE_ENV}.</div>
                                 <div class="metric-label">Environment</div>
                             </div>
                             <div class="metric">
@@ -1003,7 +1003,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     success: false,
     error: "Internal server error",
-    message: NODE_ENV === "development" ? err.message : "Something went wrong",
+    message: NODE_ENV === "dev" ? err.message : "Something went wrong",
   });
 });
 

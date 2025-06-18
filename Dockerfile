@@ -30,7 +30,7 @@ USER trading
 EXPOSE 3000
 
 # Define environment variables
-ENV NODE_ENV=production
+ENV NODE_ENV=prod
 ENV PORT=3000
 
 # Health check

@@ -139,7 +139,7 @@ The system runs automated operations using cron jobs:
 - **Selling**: Daily at 10:00 AM EST (weekdays only)  
 - **Health Check**: Every hour
 
-Schedules can be customized in `src/server.js` or disabled by setting `NODE_ENV=development`.
+Schedules can be customized in `src/server.js` or disabled by setting `NODE_ENV=dev`.
 
 ## 📝 Available Commands
 

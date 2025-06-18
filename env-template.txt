@@ -2,7 +2,7 @@
 # Copy this file to .env and fill in your actual values
 
 # ===== SERVER CONFIGURATION =====
-NODE_ENV=development
+NODE_ENV=dev
 PORT=3000
 
 # ===== DIRECTORIES =====
