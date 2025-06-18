@@ -1,369 +1,579 @@
-const Alpaca = require('@alpacahq/alpaca-trade-api');
+/**
+ * @file server.js
+ * @description Main server file for the Magic Formula Automated Trading System.
+ * This Express server provides:
+ * 1. RESTful API endpoints for manual trading operations
+ * 2. Cron job scheduling for automated buying and selling
+ * 3. Health check endpoints
+ * 4. Portfolio monitoring dashboard
+ * 5. Database management utilities
+ * 
+ * @requires express - Web framework for Node.js
+ * @requires dotenv - Environment variable management
+ * @requires node-cron - Task scheduling
+ * @requires sqlite3 - Database operations
+ * @requires path - File path utilities
+ * @requires fs - File system operations
+ */
+
+require('dotenv').config();
 const express = require('express');
-require('dotenv').config(); // Load .env variables
-
-// Create an Express application
-const app = express();
-const PORT = 3000;
-
-// Alpaca API configuration
-const alpaca = new Alpaca({
-  keyId: process.env.ALPCA_SANDBOX_TRADING_PUBLIC_KEY, 
-  secretKey: process.env.ALPCA_SANDBOX_TRADING_SECRET_KEY, 
-  baseUrl: process.env.ALPCA_SANDBOX_TRADING_ENDPOINT, 
-});
-
-// Function to place an after-market buy order
-const buyMetaSharesAfterMarket = async () => {
-  try {
-    const order = await alpaca.createOrder({
-      symbol: 'META',
-      qty: 10,
-      side: 'buy',
-      type: 'market',
-      time_in_force: 'day',    // or 'gtc'
-      extended_hours: true,    // ensures it's eligible for after-hours
-    });
-    console.log('After-market order placed:', order);
-    return { success: true, order };
-  } catch (error) {
-    console.error('Error placing after-market order:', error);
-    return { success: false, error };
-  }
-};
-
-// Endpoint to trigger the regular buy order
-app.get('/buy-meta', async (req, res) => {
-  const result = await buyMetaShares();
-  if (result.success) {
-    res.status(200).send({ message: 'Order placed successfully.', order: result.order });
-  } else {
-    res.status(500).send({ message: 'Failed to place order.', error: result.error });
-  }
-});
-
-// Endpoint to trigger the after-market buy order
-app.get('/buy-meta-aftermarket', async (req, res) => {
-  const result = await buyMetaSharesAfterMarket();
-  if (result.success) {
-    res.status(200).send({ message: 'After-market order placed successfully.', order: result.order });
-  } else {
-    res.status(500).send({ message: 'Failed to place after-market order.', error: result.error });
-  }
-});
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-
-/**
- * magicFormulaBot.js
- *
- * A skeleton Node.js script that:
- *  1) Fetches relevant stock data.
- *  2) Calculates Magic Formula metrics (Earnings Yield & Return on Capital).
- *  3) Ranks stocks and selects a portfolio.
- *  4) Schedules trades to buy, and then sell just before & after 1 year for tax optimization.
- *  5) Logs important events to a text file.
- *
- * Dependencies (example):
- *  - node-cron (for scheduling)
- *  - axios or node-fetch (for API calls, if needed)
- *  - fs (for reading/writing logs and position tracking)
- */
-
-//////////////////////////////
-// 1. IMPORT DEPENDENCIES  //
-//////////////////////////////
-
 const cron = require('node-cron');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 const fs = require('fs');
-// const axios = require('axios'); // or use node-fetch
+const { exec } = require('child_process');
 
-//////////////////////////////
-// 2. CONFIG / CONSTANTS    //
-//////////////////////////////
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Example: you might set your watchlist or define minMarketCap, etc.
-const SETTINGS = {
-  MIN_MARKET_CAP: 100e6,  // $100 million
-  PORTFOLIO_SIZE: 30,     // Choose top 30 ranked stocks
-  LOG_FILE: 'magic_formula_log.txt',
-  POSITIONS_FILE: 'positions.json', // Track your current holdings and buy dates
-  // Cron schedules (crontab format): https://crontab.guru/
-  FETCH_CRON: '0 10 * * 1-5',  // Every weekday at 10:00 (example)
-  REBALANCE_CRON: '0 11 * * 1', // Every Monday at 11:00 (example)
-};
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
 
-////////////////////////////////////////
-// 3. UTILITY FUNCTIONS (STUB EXAMPLES)
-////////////////////////////////////////
+// Environment variables
+const {
+    LOG_DIR = './logs',
+    DATABASE_DIR = './database',
+    NODE_ENV
+} = process.env;
 
-/**
- * logMessage: Logs a string to console and to a text file.
- */
-function logMessage(message) {
-  const timestamp = new Date().toISOString();
-  const logLine = `[${timestamp}] ${message}\n`;
-  
-  // Log to console
-  console.log(logLine.trim());
-
-  // Append to text file
-  fs.appendFileSync(SETTINGS.LOG_FILE, logLine, 'utf8');
-}
-
-/**
- * fetchStockData: Stub for fetching stock data (e.g., from an API or a local DB).
- * Returns an array of stock objects with at least: { ticker, marketCap, ebit, netFixedAssets, netWorkingCapital, enterpriseValue }.
- */
-async function fetchStockData() {
-  // Example placeholder
-  logMessage('Fetching stock data...');
-  // In reality, this might be an API call, or read from a local DB/file, etc.
-  // Return an array of stock info
-  return [
-    {
-      ticker: 'AAPL',
-      marketCap: 2300e9,
-      ebit: 100e9,
-      enterpriseValue: 2400e9,
-      netWorkingCapital: 50e9,
-      netFixedAssets: 100e9,
-    },
-    {
-      ticker: 'MSFT',
-      marketCap: 2000e9,
-      ebit: 80e9,
-      enterpriseValue: 2100e9,
-      netWorkingCapital: 40e9,
-      netFixedAssets: 80e9,
-    },
-    // ... etc.
-  ];
-}
-
-/**
- * calculateMetrics: Given a stock object, compute Earnings Yield (EY) and Return on Capital (ROC).
- * Returns an updated object with the computed values.
- */
-function calculateMetrics(stock) {
-  // Earnings Yield (EY) = EBIT / Enterprise Value
-  const earningsYield = stock.ebit / stock.enterpriseValue;
-
-  // Return on Capital (ROC) = EBIT / (Net Working Capital + Net Fixed Assets)
-  const capital = stock.netWorkingCapital + stock.netFixedAssets;
-  const returnOnCapital = capital ? (stock.ebit / capital) : 0;
-
-  return {
-    ...stock,
-    earningsYield,
-    returnOnCapital,
-  };
-}
-
-/**
- * rankStocks: Sort stocks by their combined rank of EY and ROC.
- *  1) Sort by EY (descending)
- *  2) Sort by ROC (descending)
- *  3) Combine ranks
- */
-function rankStocks(stocks) {
-  // 1. Sort by EY descending
-  const byEY = [...stocks].sort((a, b) => b.earningsYield - a.earningsYield);
-  byEY.forEach((s, idx) => { s.eyRank = idx + 1; });
-
-  // 2. Sort by ROC descending
-  const byROC = [...stocks].sort((a, b) => b.returnOnCapital - a.returnOnCapital);
-  byROC.forEach((s, idx) => { s.rocRank = idx + 1; });
-
-  // 3. Combine ranks & sort by sum
-  // Merge the eyRank and rocRank back into original array
-  // An easy way is to just keep them in the same references, so each object has eyRank and rocRank set
-  return [...stocks].sort((a, b) => (a.eyRank + a.rocRank) - (b.eyRank + b.rocRank));
-}
-
-/**
- * buildPortfolio: Select the top N stocks (from the ranked list) that meet any additional criteria (e.g., min market cap).
- */
-function buildPortfolio(rankedStocks) {
-  const filtered = rankedStocks.filter(stock => stock.marketCap >= SETTINGS.MIN_MARKET_CAP);
-  return filtered.slice(0, SETTINGS.PORTFOLIO_SIZE);
-}
-
-/**
- * loadPositions: Reads current positions from a JSON file.
- */
-function loadPositions() {
-  if (!fs.existsSync(SETTINGS.POSITIONS_FILE)) {
-    return [];
-  }
-  const data = fs.readFileSync(SETTINGS.POSITIONS_FILE, 'utf8');
-  return JSON.parse(data);
-}
-
-/**
- * savePositions: Saves updated positions to a JSON file.
- */
-function savePositions(positions) {
-  fs.writeFileSync(SETTINGS.POSITIONS_FILE, JSON.stringify(positions, null, 2), 'utf8');
-}
-
-/**
- * placeBuyOrder: Stub function to simulate or interact with a broker API to buy a stock.
- */
-async function placeBuyOrder(stock) {
-  // e.g., call broker API or paper trade simulation
-  logMessage(`Placing BUY order for ${stock.ticker}`);
-}
-
-/**
- * placeSellOrder: Stub function to simulate or interact with a broker API to sell a stock.
- */
-async function placeSellOrder(stock) {
-  logMessage(`Placing SELL order for ${stock.ticker}`);
-}
-
-/////////////////////////////////////////////
-// 4. MAIN WORKFLOW (BUY & REBALANCE LOGIC)
-/////////////////////////////////////////////
-
-/**
- * performMagicFormulaRebalance:
- *  1) Fetch and compute metrics for all stocks.
- *  2) Rank and pick the top X.
- *  3) Compare to current positions.
- *  4) Place buy orders for newly selected stocks (not already held).
- *  5) Potentially sell positions that are no longer in the top X (up to you).
- *  6) Log events.
- */
-async function performMagicFormulaRebalance() {
-  try {
-    logMessage('=== Starting Magic Formula Rebalance ===');
-
-    // 1) Fetch & compute metrics
-    const rawData = await fetchStockData();
-    const withMetrics = rawData.map(calculateMetrics);
-
-    // 2) Rank
-    const ranked = rankStocks(withMetrics);
-
-    // 3) Build portfolio
-    const targetPortfolio = buildPortfolio(ranked);
-
-    // 4) Load current positions
-    let currentPositions = loadPositions();
-
-    // 5) Determine buys (stocks in targetPortfolio but not in currentPositions)
-    const currentTickers = currentPositions.map(pos => pos.ticker);
-    const buyCandidates = targetPortfolio.filter(s => !currentTickers.includes(s.ticker));
-
-    // 6) Place buy orders and update positions
-    for (const stock of buyCandidates) {
-      await placeBuyOrder(stock);
-      currentPositions.push({
-        ticker: stock.ticker,
-        buyDate: new Date().toISOString(),
-        // Store any other relevant info (like buy price, etc.)
-      });
+// Ensure directories exist
+[LOG_DIR, DATABASE_DIR].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
-
-    // OPTIONAL: Determine sells (stocks in currentPositions but not in targetPortfolio)
-    // Depending on whether you want a strict top-X approach or to hold for 1 year, etc.
-    // For the Magic Formula, typically you hold for a year. 
-    // You might handle that logic separately in a "sell check" job (see below).
-
-    // Save updated positions
-    savePositions(currentPositions);
-
-    logMessage('=== Magic Formula Rebalance Complete ===');
-  } catch (error) {
-    logMessage(`Error in performMagicFormulaRebalance: ${error.message}`);
-  }
-}
-
-////////////////////////////////////////////////////
-// 5. SCHEDULING SELL LOGIC (JUST BEFORE/AFTER 1YR)
-////////////////////////////////////////////////////
-
-/**
- * checkPositionsForSell:
- *  - Iterate over positions, check if they've been held for ~1 year.
- *  - If yes, place a SELL order just before 1yr for tax optimization, and possibly another one just after.
- *    (Implementation details depend on your local tax rules & strategy.)
- */
-async function checkPositionsForSell() {
-  try {
-    logMessage('=== Checking positions for potential sells ===');
-    let currentPositions = loadPositions();
-
-    const now = new Date();
-
-    // This is just an illustrative approach:
-    //   - SellPart1Date = (365 - X) days after buyDate
-    //   - SellPart2Date = (365 + X) days after buyDate
-    // Adjust X for how many days before/after the 1 year threshold you want to sell.
-    const DAYS_BEFORE_1_YEAR = 1;  // e.g., 1 day before 1 year
-    const DAYS_AFTER_1_YEAR = 1;   // e.g., 1 day after 1 year
-
-    // Helper to compare date difference
-    function daysBetween(d1, d2) {
-      return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
-    }
-
-    // Filter or map to find positions that need to be sold
-    for (const position of currentPositions) {
-      const buyDate = new Date(position.buyDate);
-      const holdingDays = daysBetween(buyDate, now);
-
-      // Example logic:
-      // if (holdingDays >= (365 - DAYS_BEFORE_1_YEAR) && !position.preYearSellDone) {
-      //   await placeSellOrder(position);
-      //   position.preYearSellDone = true; // Mark that we've sold part or fully
-      // }
-
-      // if (holdingDays >= (365 + DAYS_AFTER_1_YEAR) && !position.postYearSellDone) {
-      //   await placeSellOrder(position);
-      //   position.postYearSellDone = true;
-      // }
-
-      // Or some variation that matches your actual strategy
-    }
-
-    // Save updated positions
-    savePositions(currentPositions);
-    logMessage('=== Finished checking positions for sells ===');
-  } catch (error) {
-    logMessage(`Error in checkPositionsForSell: ${error.message}`);
-  }
-}
-
-///////////////////////////////////////////
-// 6. CRON JOBS TO AUTOMATE THE WORKFLOW //
-///////////////////////////////////////////
-
-// 6a. Fetch and rebalance (e.g., once per week or once per month)
-cron.schedule(SETTINGS.REBALANCE_CRON, async () => {
-  // Example: run every Monday at 11:00 (see SETTINGS for the exact pattern)
-  await performMagicFormulaRebalance();
 });
 
-// 6b. Check if any positions need to be sold for the 1yr logic (daily or weekly)
-cron.schedule(SETTINGS.FETCH_CRON, async () => {
-  // Example: run every weekday at 10:00
-  await checkPositionsForSell();
+// Initialize SQLite Database
+const dbPath = path.join(DATABASE_DIR, 'portfolio.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Error connecting to SQLite database:', err.message);
+        process.exit(1);
+    } else {
+        console.log('Connected to SQLite database at:', dbPath);
+    }
+});
+
+// Create tables if they don't exist
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS holdings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            acquisition_date TEXT NOT NULL,
+            acquisition_price REAL,
+            status TEXT NOT NULL CHECK(status IN ('active', 'sold')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            action TEXT NOT NULL CHECK(action IN ('buy', 'sell')),
+            quantity INTEGER NOT NULL,
+            price REAL NOT NULL,
+            total_amount REAL NOT NULL,
+            transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS cron_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name TEXT NOT NULL,
+            schedule TEXT NOT NULL,
+            script_path TEXT NOT NULL,
+            last_run DATETIME,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
 });
 
 /**
- * Start script
+ * Utility function to log messages with timestamps
  */
-(async function main() {
-  logMessage('Starting Magic Formula Bot...');
-  // Optionally perform an immediate rebalance check on startup
-  // await performMagicFormulaRebalance();
+function logMessage(message, logFile = 'server.log') {
+    const timestamp = new Date().toISOString();
+    const logPath = path.join(LOG_DIR, logFile);
+    fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+    console.log(`[${timestamp}] ${message}`);
+}
 
-  // The cron jobs are now scheduled and will run in the background
-  logMessage('Magic Formula Bot is running (cron jobs scheduled).');
-})();
+/**
+ * Execute a script and return a promise
+ */
+function executeScript(scriptPath, args = []) {
+    return new Promise((resolve, reject) => {
+        const command = `node ${scriptPath} ${args.join(' ')}`;
+        logMessage(`Executing: ${command}`);
+        
+        // Use parent directory as cwd since server.js is now in src/
+        const rootDir = path.join(__dirname, '..');
+        exec(command, { cwd: rootDir }, (error, stdout, stderr) => {
+            if (error) {
+                logMessage(`Script execution error: ${error.message}`, 'cron-errors.log');
+                reject(error);
+            } else {
+                logMessage(`Script completed successfully: ${scriptPath}`);
+                if (stdout) logMessage(`STDOUT: ${stdout.trim()}`);
+                if (stderr) logMessage(`STDERR: ${stderr.trim()}`);
+                resolve({ stdout, stderr });
+            }
+        });
+    });
+}
+
+// ===================== CRON JOB SCHEDULING =====================
+
+// Buy positions: First day of Jan, Apr, Jul, Oct at 9:00 AM
+const buyPositionsCron = cron.schedule('0 9 1 1,4,7,10 *', async () => {
+    logMessage('Starting scheduled buy positions job...');
+    try {
+        await executeScript('./src/scripts/buyPositions.js');
+        logMessage('Buy positions job completed successfully');
+    } catch (error) {
+        logMessage(`Buy positions job failed: ${error.message}`, 'cron-errors.log');
+    }
+}, {
+    scheduled: false,
+    timezone: "America/New_York"
+});
+
+// Sell positions: Daily at 10:00 AM (Monday-Friday)
+const sellPositionsCron = cron.schedule('0 10 * * 1-5', async () => {
+    logMessage('Starting scheduled sell positions job...');
+    try {
+        await executeScript('./src/scripts/sellPositions.js');
+        logMessage('Sell positions job completed successfully');
+    } catch (error) {
+        logMessage(`Sell positions job failed: ${error.message}`, 'cron-errors.log');
+    }
+}, {
+    scheduled: false,
+    timezone: "America/New_York"
+});
+
+// Health check cron: Every hour
+const healthCheckCron = cron.schedule('0 * * * *', () => {
+    logMessage('System health check - Server running normally');
+}, {
+    scheduled: false
+});
+
+// Start cron jobs
+if (NODE_ENV === 'production') {
+    buyPositionsCron.start();
+    sellPositionsCron.start();
+    healthCheckCron.start();
+    logMessage('All cron jobs started for production environment');
+} else {
+    logMessage('Cron jobs disabled in development mode');
+}
+
+// ===================== API ENDPOINTS =====================
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        environment: NODE_ENV,
+        cronJobs: {
+            buyPositions: buyPositionsCron.running ? 'running' : 'stopped',
+            sellPositions: sellPositionsCron.running ? 'running' : 'stopped',
+            healthCheck: healthCheckCron.running ? 'running' : 'stopped'
+        }
+    });
+});
+
+// Get portfolio holdings
+app.get('/api/holdings', (req, res) => {
+    const query = `
+        SELECT h.*, 
+               (CASE WHEN h.status = 'active' THEN 'Active' ELSE 'Sold' END) as status_display
+        FROM holdings h 
+        ORDER BY h.acquisition_date DESC
+    `;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            logMessage(`Database error: ${err.message}`, 'api-errors.log');
+            res.status(500).json({ 
+                success: false, 
+                error: 'Database error',
+                message: err.message 
+            });
+        } else {
+            res.json({ 
+                success: true, 
+                data: rows,
+                count: rows.length
+            });
+        }
+    });
+});
+
+// Get transaction history
+app.get('/api/transactions', (req, res) => {
+    const { limit = 50, offset = 0 } = req.query;
+    
+    const query = `
+        SELECT * FROM transactions 
+        ORDER BY transaction_date DESC 
+        LIMIT ? OFFSET ?
+    `;
+    
+    db.all(query, [parseInt(limit), parseInt(offset)], (err, rows) => {
+        if (err) {
+            logMessage(`Database error: ${err.message}`, 'api-errors.log');
+            res.status(500).json({ 
+                success: false, 
+                error: 'Database error',
+                message: err.message 
+            });
+        } else {
+            res.json({ 
+                success: true, 
+                data: rows,
+                count: rows.length
+            });
+        }
+    });
+});
+
+// Manual buy trigger
+app.post('/api/manual/buy', async (req, res) => {
+    logMessage('Manual buy positions triggered via API');
+    
+    try {
+        const result = await executeScript('./src/scripts/buyPositions.js');
+        res.json({
+            success: true,
+            message: 'Buy positions script executed successfully',
+            output: result.stdout
+        });
+    } catch (error) {
+        logMessage(`Manual buy failed: ${error.message}`, 'api-errors.log');
+        res.status(500).json({
+            success: false,
+            error: 'Script execution failed',
+            message: error.message
+        });
+    }
+});
+
+// Manual sell trigger
+app.post('/api/manual/sell', async (req, res) => {
+    logMessage('Manual sell positions triggered via API');
+    
+    try {
+        const result = await executeScript('./src/scripts/sellPositions.js');
+        res.json({
+            success: true,
+            message: 'Sell positions script executed successfully',
+            output: result.stdout
+        });
+    } catch (error) {
+        logMessage(`Manual sell failed: ${error.message}`, 'api-errors.log');
+        res.status(500).json({
+            success: false,
+            error: 'Script execution failed',
+            message: error.message
+        });
+    }
+});
+
+// Get system logs
+app.get('/api/logs/:logFile?', (req, res) => {
+    const { logFile = 'server.log' } = req.params;
+    const { lines = 100 } = req.query;
+    
+    const logPath = path.join(LOG_DIR, logFile);
+    
+    if (!fs.existsSync(logPath)) {
+        return res.status(404).json({
+            success: false,
+            error: 'Log file not found',
+            availableLogs: fs.readdirSync(LOG_DIR).filter(f => f.endsWith('.log'))
+        });
+    }
+    
+    try {
+        const logContent = fs.readFileSync(logPath, 'utf8');
+        const logLines = logContent.split('\n').slice(-parseInt(lines));
+        
+        res.json({
+            success: true,
+            logFile: logFile,
+            lines: logLines.length,
+            content: logLines.join('\n')
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to read log file',
+            message: error.message
+        });
+    }
+});
+
+// Cron job management
+app.get('/api/cron/status', (req, res) => {
+    res.json({
+        success: true,
+        jobs: {
+            buyPositions: {
+                schedule: '0 9 1 1,4,7,10 *',
+                status: buyPositionsCron.running ? 'running' : 'stopped',
+                description: 'Buy positions quarterly'
+            },
+            sellPositions: {
+                schedule: '0 10 * * 1-5',
+                status: sellPositionsCron.running ? 'running' : 'stopped',
+                description: 'Sell positions daily (weekdays)'
+            },
+            healthCheck: {
+                schedule: '0 * * * *',
+                status: healthCheckCron.running ? 'running' : 'stopped',
+                description: 'System health check hourly'
+            }
+        }
+    });
+});
+
+// Portfolio statistics endpoint
+app.get('/api/stats', (req, res) => {
+    const queries = {
+        activeHoldings: 'SELECT COUNT(*) as count FROM holdings WHERE status = "active"',
+        totalTransactions: 'SELECT COUNT(*) as count FROM transactions',
+        portfolioValue: `
+            SELECT 
+                SUM(CASE WHEN action = 'buy' THEN total_amount ELSE -total_amount END) as net_invested
+            FROM transactions
+        `
+    };
+    
+    const stats = {};
+    let completedQueries = 0;
+    const totalQueries = Object.keys(queries).length;
+    
+    Object.entries(queries).forEach(([key, query]) => {
+        db.get(query, [], (err, row) => {
+            if (err) {
+                stats[key] = { error: err.message };
+            } else {
+                stats[key] = row;
+            }
+            
+            completedQueries++;
+            if (completedQueries === totalQueries) {
+                res.json({
+                    success: true,
+                    stats: stats,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        });
+    });
+});
+
+// Basic dashboard route
+app.get('/', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Magic Formula Trader Dashboard</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                h1 { color: #1976d2; }
+                .stats { display: flex; gap: 20px; margin: 20px 0; }
+                .stat-card { flex: 1; padding: 20px; background: #f8f9fa; border-radius: 4px; text-align: center; }
+                .api-section { margin: 30px 0; }
+                .api-endpoint { margin: 10px 0; padding: 10px; background: #e3f2fd; border-radius: 4px; }
+                button { background: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+                button:hover { background: #1565c0; }
+                pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎯 Magic Formula Trader Dashboard</h1>
+                <p>Automated trading system running Joel Greenblatt's Magic Formula strategy</p>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>System Status</h3>
+                        <p id="status">Loading...</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Environment</h3>
+                        <p>${NODE_ENV}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Server Uptime</h3>
+                        <p id="uptime">Loading...</p>
+                    </div>
+                </div>
+                
+                <div class="api-section">
+                    <h2>Manual Controls</h2>
+                    <button onclick="triggerBuy()">🛒 Manual Buy</button>
+                    <button onclick="triggerSell()">💰 Manual Sell</button>
+                    <button onclick="checkHealth()">❤️ Health Check</button>
+                    <button onclick="viewLogs()">📋 View Logs</button>
+                </div>
+                
+                <div class="api-section">
+                    <h2>API Endpoints</h2>
+                    <div class="api-endpoint">
+                        <strong>GET /health</strong> - System health check
+                    </div>
+                    <div class="api-endpoint">
+                        <strong>GET /api/holdings</strong> - Portfolio holdings
+                    </div>
+                    <div class="api-endpoint">
+                        <strong>GET /api/transactions</strong> - Transaction history
+                    </div>
+                    <div class="api-endpoint">
+                        <strong>GET /api/stats</strong> - Portfolio statistics
+                    </div>
+                    <div class="api-endpoint">
+                        <strong>POST /api/manual/buy</strong> - Manual buy trigger
+                    </div>
+                    <div class="api-endpoint">
+                        <strong>POST /api/manual/sell</strong> - Manual sell trigger
+                    </div>
+                </div>
+                
+                <div id="output"></div>
+            </div>
+            
+            <script>
+                function updateStatus() {
+                    fetch('/health')
+                        .then(r => r.json())
+                        .then(data => {
+                            document.getElementById('status').textContent = data.status;
+                            document.getElementById('uptime').textContent = new Date(data.timestamp).toLocaleString();
+                        })
+                        .catch(e => document.getElementById('status').textContent = 'Error');
+                }
+                
+                function triggerBuy() {
+                    fetch('/api/manual/buy', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => displayOutput('Buy Result', data))
+                        .catch(e => displayOutput('Buy Error', e));
+                }
+                
+                function triggerSell() {
+                    fetch('/api/manual/sell', { method: 'POST' })
+                        .then(r => r.json())
+                        .then(data => displayOutput('Sell Result', data))
+                        .catch(e => displayOutput('Sell Error', e));
+                }
+                
+                function checkHealth() {
+                    fetch('/health')
+                        .then(r => r.json())
+                        .then(data => displayOutput('Health Check', data))
+                        .catch(e => displayOutput('Health Error', e));
+                }
+                
+                function viewLogs() {
+                    fetch('/api/logs/server.log?lines=20')
+                        .then(r => r.json())
+                        .then(data => displayOutput('Recent Logs', data.content))
+                        .catch(e => displayOutput('Log Error', e));
+                }
+                
+                function displayOutput(title, content) {
+                    const output = document.getElementById('output');
+                    output.innerHTML = '<h3>' + title + '</h3><pre>' + JSON.stringify(content, null, 2) + '</pre>';
+                }
+                
+                // Update status every 30 seconds
+                updateStatus();
+                setInterval(updateStatus, 30000);
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    logMessage(`Unhandled error: ${err.message}`, 'api-errors.log');
+    res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        message: NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'Endpoint not found',
+        availableEndpoints: [
+            'GET /',
+            'GET /health',
+            'GET /api/holdings',
+            'GET /api/transactions',
+            'GET /api/stats',
+            'GET /api/cron/status',
+            'POST /api/manual/buy',
+            'POST /api/manual/sell'
+        ]
+    });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    logMessage('SIGTERM received. Shutting down gracefully...');
+    server.close(() => {
+        db.close((err) => {
+            if (err) {
+                logMessage(`Error closing database: ${err.message}`);
+            } else {
+                logMessage('Database connection closed.');
+            }
+            process.exit(0);
+        });
+    });
+});
+
+process.on('SIGINT', () => {
+    logMessage('SIGINT received. Shutting down gracefully...');
+    server.close(() => {
+        db.close((err) => {
+            if (err) {
+                logMessage(`Error closing database: ${err.message}`);
+            } else {
+                logMessage('Database connection closed.');
+            }
+            process.exit(0);
+        });
+    });
+});
+
+// Start server
+const server = app.listen(PORT, () => {
+    logMessage(`🚀 Magic Formula Trader Server started on port ${PORT}`);
+    logMessage(`📊 Dashboard available at: http://localhost:${PORT}`);
+    logMessage(`🔧 API available at: http://localhost:${PORT}/api/*`);
+    logMessage(`Environment: ${NODE_ENV}`);
+});
+
+module.exports = app; 
